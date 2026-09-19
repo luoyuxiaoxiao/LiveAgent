@@ -1,0 +1,112 @@
+name: Arch Build
+
+# fork 自有：给任意 tag 单独构建 Arch 原生 tar.gz 并上传到该 tag 的 release。
+# 由 sync-upstream.yml 在上游出新 tag 后自动 dispatch，也可手动指定 tag 触发。
+# 幂等：release 已有同名资产则直接跳过。
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build Arch package for, for example v1.3.6
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: 22.19.0
+
+jobs:
+  arch:
+    name: Arch Linux x64
+    # 原生构建：直链系统 WebKitGTK/IME 模块，fcitx/ibus 开箱即用，
+    # 这正是 AppImage 自带库与系统输入法冲突而修不好的根因。
+    # Arch 滚动系 glibc 远新于 2.35，此产物仅面向 Arch 系发行版，不做 glibc 基线检查。
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    env:
+      LIVEAGENT_RELEASE_TAG: ${{ github.event.inputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      - name: Resolve release version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: node scripts/release/prepare-app-version-from-tag.mjs "$RELEASE_TAG" --github-output "$GITHUB_OUTPUT" --json
+
+      - name: Skip if asset already exists
+        id: skip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          asset="LiveAgent-${RELEASE_TAG}-Linux-x86_64-Arch.tar.gz"
+          if gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qx "$asset"; then
+            echo "Asset $asset already exists, skipping build."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Arch build dependencies
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed \
+            base-devel \
+            curl \
+            git \
+            nodejs-lts-iron \
+            npm \
+            protobuf \
+            webkit2gtk-4.1 \
+            gtk3 \
+            libayatana-appindicator \
+            librsvg \
+            openssl \
+            xdotool
+          npm install -g pnpm@10.32.1
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare release version config
+        if: steps.skip.outputs.skip != 'true'
+        working-directory: crates/agent-gui
+        env:
+          LIVEAGENT_RELEASE_TAG: ${{ github.event.inputs.tag }}
+          LIVEAGENT_APP_VERSION: ${{ steps.version.outputs.app_version }}
+        run: node ../../scripts/release/prepare-app-version-from-tag.mjs "$LIVEAGENT_RELEASE_TAG" --github-env "$GITHUB_ENV" --tauri-config src-tauri/tauri.version.generated.conf.json
+
+      - name: Install frontend dependencies
+        if: steps.skip.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile --filter liveagent...
+
+      - name: Build Arch binary (no bundles)
+        if: steps.skip.outputs.skip != 'true'
+        working-directory: crates/agent-gui
+        run: pnpm tauri build --config src-tauri/tauri.linux.release.conf.json --config "$LIVEAGENT_TAURI_VERSION_CONFIG" --target x86_64-unknown-linux-gnu --bundles none
+
+      - name: Package and upload Arch tarball
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          export LIVEAGENT_RELEASE_TAG="$RELEASE_TAG"
+          bash scripts/release/package-linux-arch-tarball.sh
+          asset="dist/LiveAgent-${RELEASE_TAG}-Linux-x86_64-Arch.tar.gz"
+          test -f "$asset"
+          # release 不存在则先建一个（沿用上游 generate-notes），已存在则直接追加资产。
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            notes="$RUNNER_TEMP/arch-release-notes.md"
+            gh api "repos/$GH_REPO/releases/generate-notes" -f tag_name="$RELEASE_TAG" --jq '.body' > "$notes" || printf 'LiveAgent %s\n' "$RELEASE_TAG" > "$notes"
+            gh release create "$RELEASE_TAG" --verify-tag --title "LiveAgent $RELEASE_TAG" --notes-file "$notes"
+          fi
+          gh release upload "$RELEASE_TAG" "$asset" --clobber

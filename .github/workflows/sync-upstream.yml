@@ -1,8 +1,9 @@
 name: Sync Upstream
 
-# 定时把 Stack-Cairn/LiveAgent 的 main + tags 同步到本 fork。
-# tags 被推送后，desktop-release.yml 的 `push: tags: v*` 自动触发，
-# arch job 随之构建并发布 Arch tar.gz——即，每次上游发版自动跟随出包。
+# 定时把 Stack-Cairn/LiveAgent 的 main + tags 合并到本 fork（merge 而非 reset，
+# fork 自有文件如本 workflow、arch 打包脚本不会被上游覆盖丢失）。
+# merge 后 push main；若上游有新 tag，逐个 dispatch arch-build.yml 补 Arch 包。
+# 同步冲突时 job 失败并保留现场，需人工到 Actions 日志看冲突文件后手动处理。
 on:
   schedule:
     - cron: "17 3 * * *" # 每天 03:17 UTC 跑一次，避开整点高峰
@@ -10,10 +11,11 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   sync:
-    name: Sync main and tags from upstream
+    name: Merge upstream and dispatch Arch builds
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -21,15 +23,38 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.SYNC_PAT }}
 
-      - name: Sync with upstream
-        env:
-          SYNC_PAT: ${{ secrets.SYNC_PAT }}
+      - name: Merge upstream main
         run: |
           set -euo pipefail
-          test -n "$SYNC_PAT"
           git remote add upstream https://github.com/Stack-Cairn/LiveAgent.git 2>/dev/null || true
           git fetch upstream --tags
           git checkout main
-          git reset --hard upstream/main
-          git push origin main --force-with-lease
-          git push origin --tags --force-with-lease
+          # 快进则快进，否则 merge（保留 fork 自有改动）；冲突即失败，人工处理。
+          git merge --no-edit upstream/main || {
+            echo "CONFLICT: upstream 与 fork 改动冲突，需人工手动 merge 后 push。"
+            git status --short
+            exit 1
+          }
+          git push origin main
+
+      - name: Dispatch Arch build for new upstream tags
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # 上游 7 天内 v* tag（含最新 tag 兜底），逐个触发 arch-build。
+          # arch-build 自带幂等：release 已有同名资产则跳过。
+          # 历史 tag 回填：workflow_dispatch 时传 tags 参数（空格分隔）即可。
+          if [ -n "${{ github.event.inputs.tags || '' }}" ]; then
+            tags="${{ github.event.inputs.tags }}"
+          else
+            tags="$(git tag --list 'v*' --sort=-creatordate | head -n 1)"
+            tags="$tags $(git tag --list 'v*' --sort=-creatordate --format='%(creatordate:unix) %(refname:short)' | awk -v now="$(date +%s)" 'now - $1 < 604800 {print $2}')"
+            tags="$(echo "$tags" | tr ' ' '\n' | awk 'NF && !seen[$0]++' | tr '\n' ' ')"
+          fi
+          test -n "$tags" || { echo "no tags to dispatch"; exit 0; }
+          echo "dispatching Arch builds for tags:$tags"
+          for tag in $tags; do
+            gh workflow run arch-build.yml --repo "$GH_REPO" --ref main -f tag="$tag"
+          done
