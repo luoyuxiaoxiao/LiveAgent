@@ -41,6 +41,7 @@ jobs:
             base-devel \
             curl \
             git \
+            github-cli \
             nodejs-lts-iron \
             npm \
             protobuf \
@@ -90,20 +91,21 @@ jobs:
 
       # checkout 的是 tag 源码（旧），arch 打包文件只存在于 main。
       # 从 main 取 conf+脚本，且两者都 pin 到构建时的 main commit，保证一致。
+      # checkout 的是 tag 源码（旧），arch 打包文件只存在于 main。
+      # container 内 git 仓库元数据不可用（checkout 的 .git 在容器挂载边界之外），
+      # 改用 gh api 直接从 main 取文件内容。
       - name: Fetch Arch packaging files from main
         if: steps.skip.outputs.skip != 'true'
-        working-directory: ${{ github.workspace }}
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          pwd
-          git rev-parse --show-toplevel
-          git fetch origin main --depth 1
-          git show "origin/main:crates/agent-gui/src-tauri/tauri.arch.release.conf.json" > crates/agent-gui/src-tauri/tauri.arch.release.conf.json
-          git show "origin/main:scripts/release/package-linux-arch-tarball.sh" > scripts/release/package-linux-arch-tarball.sh
+          gh api "repos/$GH_REPO/contents/crates/agent-gui/src-tauri/tauri.arch.release.conf.json?ref=main" --jq '.content' | base64 -d > crates/agent-gui/src-tauri/tauri.arch.release.conf.json
+          gh api "repos/$GH_REPO/contents/scripts/release/package-linux-arch-tarball.sh?ref=main" --jq '.content' | base64 -d > scripts/release/package-linux-arch-tarball.sh
           chmod +x scripts/release/package-linux-arch-tarball.sh
+          test -s crates/agent-gui/src-tauri/tauri.arch.release.conf.json
+          test -s scripts/release/package-linux-arch-tarball.sh
 
       - name: Build Arch binary (no bundles)
         if: steps.skip.outputs.skip != 'true'
