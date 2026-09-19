@@ -36,7 +36,7 @@ GATEWAY_DOCKER_IMAGE ?= liveagent-gateway:local
 RELEASE_TAG ?=
 
 .PHONY: all dev build desktop-build-macos desktop-build-macos-release desktop-build-macos-intel desktop-build-macos-m desktop-build-windows desktop-build-linux github-release-main check-github-release-tag help
-.PHONY: dev-gateway dev-webui ensure-webui-embed-stub dev-stack dev-stack-stop dev-stack-restart dev-stack-status dev-stack-logs
+.PHONY: dev-gateway dev-webui ensure-webui-embed-stub dev-stack dev-stack-stop dev-stack-restart dev-stack-status dev-stack-logs desktop-build-arch
 .PHONY: proto proto-check webui gateway-build gateway-docker-build gateway-docker-run gateway-docker-smoke build-linux build-linux-amd build-linux-arm
 .PHONY: clean check-rust-target-% check-macos-signing-identity check-macos-notary-profile desktop-store-macos-notary-profile desktop-wait-macos-notary desktop-staple-macos desktop-verify-macos
 .PHONY: check-fast check-all check-strict
@@ -96,6 +96,12 @@ desktop-build-windows: check-rust-target-$(DESKTOP_WINDOWS_TARGET)
 
 desktop-build-linux: check-rust-target-$(DESKTOP_LINUX_TARGET)
 	pnpm --dir $(AGENT_GUI_DIR) tauri build --target $(DESKTOP_LINUX_TARGET) --bundles $(DESKTOP_LINUX_BUNDLES)
+
+# Arch 原生包:只编二进制(--bundles none),再由脚本打包成 tar.gz。
+# CI 在 archlinux:base-devel 容器里跑,本地 Arch 同样可用。
+desktop-build-arch: check-rust-target-$(DESKTOP_LINUX_TARGET)
+	pnpm --dir $(AGENT_GUI_DIR) tauri build --target $(DESKTOP_LINUX_TARGET) --bundles none
+	bash scripts/release/package-linux-arch-tarball.sh
 
 github-release-main: check-github-release-tag
 	git fetch origin --tags

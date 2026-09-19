@@ -161,6 +161,9 @@ Choose by distribution from [Releases](https://github.com/Stack-Cairn/LiveAgent/
 | AppImage | Any distribution | `chmod +x`, then run directly |
 | DEB | Debian / Ubuntu family | `sudo dpkg -i LiveAgent-<version>-Linux-x86_64.deb` |
 | RPM | Fedora / openSUSE family | `sudo rpm -i LiveAgent-<version>-Linux-x86_64.rpm` |
+| Arch tarball | Arch Linux family (native build, IME-friendly) | Extract, then see `README-ArchLinux.txt` inside |
+
+> Arch users: prefer the `LiveAgent-<version>-Linux-x86_64-Arch.tar.gz` native build — it links the system WebKitGTK/IME modules, so fcitx/ibus work out of the box, unlike the AppImage which bundles conflicting libraries.
 
 ### Need Remote Access? Deploy the Gateway
 

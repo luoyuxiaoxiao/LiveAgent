@@ -162,6 +162,9 @@ LiveAgent 是一个 **本地优先** 的 AI Agent 桌面客户端。它将大语
 | AppImage | 任意发行版 | `chmod +x` 后直接运行 |
 | DEB | Debian / Ubuntu 系 | `sudo dpkg -i LiveAgent-<版本>-Linux-x86_64.deb` |
 | RPM | Fedora / openSUSE 系 | `sudo rpm -i LiveAgent-<版本>-Linux-x86_64.rpm` |
+| Arch tar 包 | Arch 系(原生构建,输入法友好) | 解压后按包内 `README-ArchLinux.txt` 安装 |
+
+> Arch 用户优先选 `LiveAgent-<版本>-Linux-x86_64-Arch.tar.gz` 原生包——直链系统 WebKitGTK/输入法模块,fcitx/ibus 开箱即用,不存在 AppImage 自带库与系统输入法冲突的问题。
 
 ### 需要远程访问? 部署 Gateway
 

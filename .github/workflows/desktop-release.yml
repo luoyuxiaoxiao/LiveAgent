@@ -361,6 +361,68 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  arch:
+    name: Arch Linux x64
+    # 原生构建：直链系统 WebKitGTK/IME 模块，fcitx/ibus 开箱即用，
+    # 这正是 AppImage 自带库与系统输入法冲突而修不好的根因。
+    # Arch 滚动系 glibc 远新于 2.35，此产物仅面向 Arch 系发行版，不做 glibc 基线检查。
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    needs: release-metadata
+    env:
+      LIVEAGENT_APP_VERSION: ${{ needs.release-metadata.outputs.app_version }}
+      LIVEAGENT_IS_PRERELEASE: ${{ needs.release-metadata.outputs.is_prerelease }}
+      LIVEAGENT_RELEASE_TAG: ${{ needs.release-metadata.outputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release-metadata.outputs.release_tag }}
+
+      - name: Install Arch build dependencies
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed \
+            base-devel \
+            curl \
+            git \
+            nodejs-lts-iron \
+            npm \
+            protobuf \
+            webkit2gtk-4.1 \
+            gtk3 \
+            libayatana-appindicator \
+            librsvg \
+            openssl \
+            xdotool
+          npm install -g pnpm@10.32.1
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Prepare release version config
+        working-directory: crates/agent-gui
+        run: node ../../scripts/release/prepare-app-version-from-tag.mjs "$LIVEAGENT_RELEASE_TAG" --github-env "$GITHUB_ENV" --tauri-config src-tauri/tauri.version.generated.conf.json
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile --filter liveagent...
+
+      - name: Build Arch binary (no bundles)
+        working-directory: crates/agent-gui
+        run: pnpm tauri build --config src-tauri/tauri.linux.release.conf.json --config "$LIVEAGENT_TAURI_VERSION_CONFIG" --target x86_64-unknown-linux-gnu --bundles none
+
+      - name: Package Arch tarball
+        run: bash scripts/release/package-linux-arch-tarball.sh
+
+      - name: Stage Arch artifact
+        run: |
+          set -euo pipefail
+          test -f "dist/LiveAgent-${LIVEAGENT_RELEASE_TAG}-Linux-x86_64-Arch.tar.gz"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: liveagent-arch-x64
+          path: dist/*
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
@@ -369,6 +431,7 @@ jobs:
       - macos
       - windows
       - linux
+      - arch
     env:
       LIVEAGENT_APP_VERSION: ${{ needs.release-metadata.outputs.app_version }}
       LIVEAGENT_IS_PRERELEASE: ${{ needs.release-metadata.outputs.is_prerelease }}
