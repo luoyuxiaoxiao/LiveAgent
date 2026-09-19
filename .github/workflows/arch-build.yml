@@ -31,6 +31,28 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag }}
 
+      # 注意：archlinux:base-devel 容器没有 node/pnpm/rust，必须先装依赖，
+      # 后面的版本解析、前端安装、构建步骤才有工具链可用。
+      - name: Install Arch build dependencies
+        run: |
+          set -euo pipefail
+          pacman -Syu --noconfirm --needed \
+            base-devel \
+            curl \
+            git \
+            nodejs-lts-iron \
+            npm \
+            protobuf \
+            webkit2gtk-4.1 \
+            gtk3 \
+            libayatana-appindicator \
+            librsvg \
+            openssl \
+            xdotool
+          npm install -g pnpm@10.32.1
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
       - name: Resolve release version
         id: version
         env:
@@ -52,27 +74,6 @@ jobs:
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Install Arch build dependencies
-        if: steps.skip.outputs.skip != 'true'
-        run: |
-          set -euo pipefail
-          pacman -Syu --noconfirm --needed \
-            base-devel \
-            curl \
-            git \
-            nodejs-lts-iron \
-            npm \
-            protobuf \
-            webkit2gtk-4.1 \
-            gtk3 \
-            libayatana-appindicator \
-            librsvg \
-            openssl \
-            xdotool
-          npm install -g pnpm@10.32.1
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Prepare release version config
         if: steps.skip.outputs.skip != 'true'
