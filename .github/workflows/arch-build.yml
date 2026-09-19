@@ -39,6 +39,7 @@ jobs:
           set -euo pipefail
           pacman -Syu --noconfirm --needed \
             base-devel \
+            clang \
             curl \
             git \
             github-cli \
