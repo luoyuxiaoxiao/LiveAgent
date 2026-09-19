@@ -97,10 +97,10 @@ desktop-build-windows: check-rust-target-$(DESKTOP_WINDOWS_TARGET)
 desktop-build-linux: check-rust-target-$(DESKTOP_LINUX_TARGET)
 	pnpm --dir $(AGENT_GUI_DIR) tauri build --target $(DESKTOP_LINUX_TARGET) --bundles $(DESKTOP_LINUX_BUNDLES)
 
-# Arch 原生包:只编二进制(--bundles none),再由脚本打包成 tar.gz。
-# CI 在 archlinux:base-devel 容器里跑,本地 Arch 同样可用。
+# Arch 原生包:只编二进制(tauri.arch.release.conf.json 令 targets 为 none),
+# 再由脚本打包成 tar.gz。CI 在 archlinux:base-devel 容器里跑,本地 Arch 同样可用。
 desktop-build-arch: check-rust-target-$(DESKTOP_LINUX_TARGET)
-	pnpm --dir $(AGENT_GUI_DIR) tauri build --target $(DESKTOP_LINUX_TARGET) --bundles none
+	pnpm --dir $(AGENT_GUI_DIR) tauri build --config src-tauri/tauri.arch.release.conf.json --target $(DESKTOP_LINUX_TARGET)
 	bash scripts/release/package-linux-arch-tarball.sh
 
 github-release-main: check-github-release-tag

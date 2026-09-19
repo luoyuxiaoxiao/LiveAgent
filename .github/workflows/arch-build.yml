@@ -90,7 +90,7 @@ jobs:
       - name: Build Arch binary (no bundles)
         if: steps.skip.outputs.skip != 'true'
         working-directory: crates/agent-gui
-        run: pnpm tauri build --config src-tauri/tauri.linux.release.conf.json --config "$LIVEAGENT_TAURI_VERSION_CONFIG" --target x86_64-unknown-linux-gnu --bundles none
+        run: pnpm tauri build --config src-tauri/tauri.arch.release.conf.json --config "$LIVEAGENT_TAURI_VERSION_CONFIG" --target x86_64-unknown-linux-gnu
 
       - name: Package and upload Arch tarball
         if: steps.skip.outputs.skip != 'true'
