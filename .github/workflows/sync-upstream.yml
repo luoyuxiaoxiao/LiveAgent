@@ -1,0 +1,35 @@
+name: Sync Upstream
+
+# 定时把 Stack-Cairn/LiveAgent 的 main + tags 同步到本 fork。
+# tags 被推送后，desktop-release.yml 的 `push: tags: v*` 自动触发，
+# arch job 随之构建并发布 Arch tar.gz——即，每次上游发版自动跟随出包。
+on:
+  schedule:
+    - cron: "17 3 * * *" # 每天 03:17 UTC 跑一次，避开整点高峰
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync main and tags from upstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT }}
+
+      - name: Sync with upstream
+        env:
+          SYNC_PAT: ${{ secrets.SYNC_PAT }}
+        run: |
+          set -euo pipefail
+          test -n "$SYNC_PAT"
+          git remote add upstream https://github.com/Stack-Cairn/LiveAgent.git 2>/dev/null || true
+          git fetch upstream --tags
+          git checkout main
+          git reset --hard upstream/main
+          git push origin main --force-with-lease
+          git push origin --tags --force-with-lease
