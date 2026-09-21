@@ -203,6 +203,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Refresh apt package lists
+        # runner 镜像的 apt 列表会过期，不 update 直接 install 会 404，
+        # 之前因此存下过空缓存导致后续每次命中空包（见 version 注释）。
+        run: sudo apt-get update
+
       - name: Install Tauri Linux dependencies
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
