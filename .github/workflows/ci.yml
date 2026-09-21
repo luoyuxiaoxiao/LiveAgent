@@ -207,7 +207,9 @@ jobs:
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: protobuf-compiler libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-          version: 1.0
+          # 2026-09-21 空缓存中毒过一次（命中 6KB 空包导致系统依赖未安装，
+          # glib-sys 构建失败）：version 参与缓存 key，抬升即作废旧缓存。
+          version: 1.1
           # 缓存恢复时执行安装脚本(如 ldconfig 触发器),保证测试运行期动态链接可用。
           execute_install_scripts: true
 
