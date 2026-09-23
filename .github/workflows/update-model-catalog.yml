@@ -1,8 +1,9 @@
 name: Update Model Catalog
 
+# 2026-09-23 起取消定时刷新，改手动触发（workflow_dispatch）：
+# 上游模型增减快，自动 PR 频繁失败打扰主分支节奏。
 on:
-  schedule:
-    - cron: "17 3 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -35,6 +36,9 @@ jobs:
       - name: Create or update model catalog PR
         uses: peter-evans/create-pull-request@v7
         with:
+          # 默认 GITHUB_TOKEN 被仓库设置禁止建 PR，
+          # 用 PAT（与 sync 共用）才能真正建出 PR。
+          token: ${{ secrets.SYNC_PAT }}
           base: main
           branch: automation/model-catalog-refresh
           delete-branch: true
