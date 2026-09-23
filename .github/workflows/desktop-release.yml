@@ -1,9 +1,9 @@
 name: Desktop Release
 
+# fork 说明：上游的 tag 推送会自动触发本 workflow，但在 fork 上
+# Apple 签名证书与更新签名密钥等 secrets 不存在，永远失败；
+# 且 fork 的发布需求由 arch-build 覆盖。2026-09-23 起只保留手动触发。
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
     inputs:
       tag:
