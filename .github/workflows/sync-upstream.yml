@@ -38,6 +38,9 @@ jobs:
             exit 1
           }
           git push origin main
+          # arch-build 按 tag checkout 源码，tag 必须先推到 origin，
+          # 否则新 tag 的构建在 checkout 直接 404。
+          git push origin --tags
 
       - name: Dispatch Arch build for new upstream tags
         env:
